@@ -16,4 +16,4 @@ RUN playwright install-deps
 # копирование проекта
 COPY . .
 
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
