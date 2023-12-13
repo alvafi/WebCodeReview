@@ -1,9 +1,20 @@
 import sys
+import os
 import psycopg2
 import backend.scrapper as scrapper
 from fastapi import FastAPI, HTTPException
 from loguru import logger
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SCRAPPING_START = 'Начинаем скраппинг данных'
+SCRAPPING_END_SUCCESSFULLY = 'Скраппинг успешно завершен. Содержимое: {0}'
+SCRAPPING_EXCEPTION = 'Возникла проблема при скраппинге данных с сайта'
+LOAD_DB_START = 'Сохраняем полученные данные в БД'
+DATA_LOADED_DB_SUCCESSFULLY = 'Данные успешно загружены в БД'
+GET_DATA_EXCEPTION = 'Возникла проблема при получении данных из БД'
 
 logger.remove()
 logger.add(sys.stdout, colorize=True,
@@ -12,11 +23,11 @@ app = FastAPI()
 
 def get_connection():
     return psycopg2.connect(
-        host='postgres',
-        database='DB',
-        user='USER',
-        password='PASSWORD',
-        port='5432'
+        host=os.getenv('POSTGRES_HOST'),
+        database=os.getenv('POSTGRES_DB'),
+        user=os.getenv('POSTGRES_USER'),
+        password=os.getenv('POSTGRES_PASSWORD'),
+        port=os.getenv('POSTGRES_PORT')
     )
 
 def load_data_to_db(data):
@@ -26,7 +37,7 @@ def load_data_to_db(data):
 
     delete_sql = '''DELETE FROM performances'''
     cursor.execute(delete_sql)
-    cursor.executemany("INSERT INTO performances(name, date) VALUES (%s, %s)", data)
+    cursor.executemany("INSERT INTO performances(name, date, seats, cost) VALUES (%s, %s, %s, %s)", data)
 
     conn_details.commit()
     conn_details.close()
@@ -57,27 +68,40 @@ def get_data_from_db(start_date, end_date):
 
     return result
 
+def get_seats_cost():
+    conn_details = get_connection()
+
+    cursor = conn_details.cursor()
+
+    cursor.execute('''SELECT * FROM performances WHERE cost != 0''')
+    result = cursor.fetchall()
+
+    conn_details.commit()
+    conn_details.close()
+
+    return result
+
 @app.get('/scrap_data')
 def scrap_data():
     try:
-        logger.debug('Начинаем скраппинг данных')
+        logger.debug(SCRAPPING_START)
 
         all_performances = scrapper.scrap_data()
 
         if all_performances is None:
-            raise HTTPException(500, 'Возникла проблема при скраппинге данных с сайта')
+            raise HTTPException(500, SCRAPPING_EXCEPTION)
 
-        logger.debug(str.format('Скраппинг успешно завершен. Содержимое: {0}', all_performances))
-        logger.debug('Сохраняем полученные данные в БД')
+        logger.debug(str.format(SCRAPPING_END_SUCCESSFULLY, all_performances))
+        logger.debug(LOAD_DB_START)
 
         load_data_to_db(all_performances)
 
-        logger.debug('Данные успешно загружены в БД')
+        logger.debug(DATA_LOADED_DB_SUCCESSFULLY)
 
-        return 'Данные успешно загружены в БД' + f' кол-во записей: {len(all_performances)}'
+        return DATA_LOADED_DB_SUCCESSFULLY + f' кол-во записей: {len(all_performances)}'
     except Exception as inst:
         logger.error(inst)
-        raise HTTPException(500, 'Возникла проблема при скраппинге данных с сайта')
+        raise HTTPException(500, SCRAPPING_EXCEPTION)
 
 @app.get('/performances')
 def performances(
@@ -88,4 +112,12 @@ def performances(
         return get_data_from_db(start_date, end_date)
     except Exception as inst:
         logger.error(inst)
-        raise HTTPException(500, 'Возникла проблема при получении данных из БД')
+        raise HTTPException(500, GET_DATA_EXCEPTION)
+    
+@app.get('/seats_cost')
+def number_seats():
+    try:
+        return get_seats_cost()
+    except Exception as inst:
+        logger.error(inst)
+        raise HTTPException(500, GET_DATA_EXCEPTION)

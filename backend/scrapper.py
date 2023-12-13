@@ -1,7 +1,12 @@
-import datetime
+import datetime, os
 from loguru import logger
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SCRAP_URL = os.getenv('SCRAP_URL')
 
 def convert_date(date: str): #Функция конвертирует строковое представление даты вида '6 декабря 2023 13:00' в тип datetime
     splitted = date.split(' ')
@@ -47,22 +52,24 @@ def scrap_data():
         chromium = playwright.chromium
         browser = chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto('https://perm.kassy.ru/widget/20-1/events/')
+        page.goto(SCRAP_URL)
 
         try:
             html = page.content()
 
             bsObj = BeautifulSoup(html, 'html.parser')
-            found_perfomance = bsObj.find_all(
-                'div', {'class': 'list-group-item'})
+            found_perfomance = bsObj.find_all('div', {'class': 'list-group-item'})
             all_performances = []
             for i in found_perfomance:
                 name = ' '.join(i.find('a', {'class': 'gray'}).text.split())
-                date = ' '.join(
-                    i.find('p', {'class': 'list-group-item-text date'}).text.split()[:3])
-                time = i.find(
-                    'p', {'class': 'list-group-item-text date'}).text.split()[3]
-                all_performances.append((name, convert_date(f'{date} {time}')))
+                date = ' '.join(i.find('p', {'class': 'list-group-item-text date'}).text.split()[:3])
+                time = i.find('p', {'class': 'list-group-item-text date'}).text.split()[3]
+                seats = ' '.join(i.find('div', {'class': 'd-flex justify-content-between align-items-center price'}).text.split()[:3])
+                if seats == 'Билеты в наличии:':
+                    cost = i.find('div', {'class': 'd-flex justify-content-between align-items-center price'}).text.split()[3]
+                    all_performances.append((name, convert_date(f'{date} {time}'), seats, cost))
+                else:
+                    all_performances.append((name, convert_date(f'{date} {time}'), seats, 0))
         except Exception as inst:
             logger.error(inst)
         finally:

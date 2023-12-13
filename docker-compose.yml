@@ -1,6 +1,11 @@
 version: "3.9"
 services:
   web:
+    environment:
+        POSTGRES_HOST: ${POSTGRES_HOST}
+        POSTGRES_DB: ${POSTGRES_DB}
+        POSTGRES_USER: ${POSTGRES_USER}
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     build:
       context: .
       dockerfile: ./backend/Dockerfile
@@ -12,16 +17,16 @@ services:
       - postgres
 
   postgres:
-    image: postgres
+    image: postgres:15
     environment:
-      POSTGRES_DB: "DB"
-      POSTGRES_USER: "USER"
-      POSTGRES_PASSWORD: "PASSWORD"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./db:/docker-entrypoint-initdb.d
-      - teather-scrapper-db:/var/lib/postgresql/data
+      - theater-scrapper-db:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:${POSTGRES_PORT}"
 
 volumes:
-  teather-scrapper-db:
+  theater-scrapper-db:
